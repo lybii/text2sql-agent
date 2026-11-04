@@ -1,0 +1,117 @@
+code: sales
+name: Giao dịch bán hàng
+description: Mỗi dòng là một giao dịch mua bán bất động sản kèm loại sản phẩm, dự án, khu vực, nhân viên phụ trách, nguồn khách và trạng thái. Dùng cho câu hỏi về doanh thu, hoa hồng, số giao dịch.
+access: open
+sensitivity: internal
+owner: Phòng Kinh doanh
+keywords: [giao dịch, doanh thu, doanh số, bán, hoa hồng, hợp đồng, hủy, đặt cọc]
+sample_questions:
+  - Doanh thu năm 2025 là bao nhiêu?
+  - Doanh thu theo thành phố trong quý 2 năm 2025
+  - Top 5 dự án có doanh thu cao nhất năm 2025
+  - Doanh thu căn hộ tại Hà Nội theo tháng năm 2025
+  - Tỷ lệ hủy giao dịch năm 2024
+
+tables:
+  - name: analytics.v_transactions
+    description: Giao dịch bất động sản (đã ẩn thông tin cá nhân khách hàng).
+    columns:
+      - {name: transaction_id, type: int, description: Mã giao dịch}
+      - {name: property_code, type: text, description: Mã bất động sản}
+      - {name: property_type, type: text, description: Loại bất động sản, values: [Căn hộ, Nhà phố, Đất nền, Biệt thự]}
+      - {name: project_name, type: text, description: Tên dự án, values: [Lotus Garden, Sky Harbor, Maple Residence, Riverside One, Golden Coast, Pine Hill]}
+      - {name: district, type: text, description: Quận/huyện, values: [Cầu Giấy, Tây Hồ, Hoàng Mai, Long Biên, Nam Từ Liêm, Quận 1, Quận 7, Thủ Đức, Bình Thạnh, Gò Vấp, Hải Châu, Sơn Trà, Ngũ Hành Sơn]}
+      - {name: city, type: text, description: Thành phố, values: [Hà Nội, TP.HCM, Đà Nẵng]}
+      - {name: agent_id, type: int, description: Mã nhân viên kinh doanh}
+      - {name: agent_name, type: text, description: Tên nhân viên kinh doanh phụ trách}
+      - {name: customer_source, type: text, description: Kênh khách hàng biết đến công ty, values: [Quảng cáo online, Giới thiệu, Website, Sự kiện, Khách vãng lai]}
+      - {name: status, type: text, description: "Trạng thái. Chỉ 'Hoàn tất' mới ghi nhận doanh thu", values: [Hoàn tất, Đặt cọc, Đang xử lý, Đã hủy]}
+      - {name: sale_price, type: numeric, description: Giá trị giao dịch thực tế (VNĐ)}
+      - {name: commission, type: numeric, description: Hoa hồng của giao dịch (VNĐ)}
+      - {name: created_date, type: date, description: Ngày tạo giao dịch}
+      - {name: completed_date, type: date, description: Ngày hoàn tất — thời điểm ghi nhận doanh thu; NULL nếu chưa hoàn tất}
+
+metrics:
+  - code: completed_revenue
+    name: Doanh thu
+    description: Tổng giá trị các giao dịch đã hoàn tất, ghi nhận theo ngày hoàn tất.
+    expression: SUM(sale_price)
+    table: analytics.v_transactions
+    time_column: completed_date
+    filters: ["status = 'Hoàn tất'"]
+    requires_time: true
+    unit: vnd
+    aliases: [doanh thu, doanh số, tổng doanh thu, giá trị bán, tiền bán được, bán được bao nhiêu tiền]
+  - code: total_commission
+    name: Hoa hồng
+    description: Tổng hoa hồng của các giao dịch đã hoàn tất.
+    expression: SUM(commission)
+    table: analytics.v_transactions
+    time_column: completed_date
+    filters: ["status = 'Hoàn tất'"]
+    requires_time: true
+    unit: vnd
+    aliases: [hoa hồng, tổng hoa hồng, phí môi giới]
+  - code: completed_deals
+    name: Số giao dịch hoàn tất
+    description: Số giao dịch đã hoàn tất.
+    expression: COUNT(*)
+    table: analytics.v_transactions
+    time_column: completed_date
+    filters: ["status = 'Hoàn tất'"]
+    requires_time: true
+    unit: count
+    aliases: [số giao dịch hoàn tất, giao dịch hoàn tất, số giao dịch thành công, bán được bao nhiêu căn, số căn đã bán, số giao dịch]
+  - code: avg_deal_value
+    name: Giá trị giao dịch trung bình
+    description: Giá trị trung bình của giao dịch đã hoàn tất.
+    expression: ROUND(AVG(sale_price))
+    table: analytics.v_transactions
+    time_column: completed_date
+    filters: ["status = 'Hoàn tất'"]
+    requires_time: true
+    unit: vnd
+    aliases: [giá trị giao dịch trung bình, giá bán trung bình, giá trung bình mỗi giao dịch]
+  - code: cancellation_rate
+    name: Tỷ lệ hủy
+    description: Phần trăm giao dịch bị hủy trên tổng số giao dịch được tạo trong kỳ.
+    expression: ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'Đã hủy') / NULLIF(COUNT(*), 0), 2)
+    table: analytics.v_transactions
+    time_column: created_date
+    requires_time: true
+    unit: percent
+    aliases: [tỷ lệ hủy, tỉ lệ hủy, tỷ lệ giao dịch bị hủy]
+
+dimensions:
+  - {column: city, table: analytics.v_transactions, name: Thành phố, aliases: [thành phố, tỉnh]}
+  - {column: district, table: analytics.v_transactions, name: Quận/huyện, aliases: [quận, huyện, khu vực]}
+  - {column: property_type, table: analytics.v_transactions, name: Loại BĐS, aliases: [loại bất động sản, loại bđs, loại sản phẩm, loại hình]}
+  - {column: project_name, table: analytics.v_transactions, name: Dự án, aliases: [dự án]}
+  - {column: agent_name, table: analytics.v_transactions, name: Nhân viên, aliases: [nhân viên, môi giới, sale]}
+  - {column: customer_source, table: analytics.v_transactions, name: Nguồn khách, aliases: [nguồn khách, kênh, nguồn khách hàng]}
+  - {column: status, table: analytics.v_transactions, name: Trạng thái, aliases: [trạng thái]}
+
+examples:
+  - question: Doanh thu năm 2025 là bao nhiêu?
+    sql: |
+      SELECT SUM(sale_price) AS completed_revenue
+      FROM analytics.v_transactions
+      WHERE status = 'Hoàn tất'
+        AND completed_date >= DATE '2025-01-01' AND completed_date < DATE '2026-01-01'
+  - question: Top 3 dự án có doanh thu cao nhất quý 2 năm 2025
+    sql: |
+      SELECT project_name, SUM(sale_price) AS completed_revenue
+      FROM analytics.v_transactions
+      WHERE status = 'Hoàn tất'
+        AND completed_date >= DATE '2025-04-01' AND completed_date < DATE '2025-07-01'
+      GROUP BY project_name
+      ORDER BY completed_revenue DESC
+      LIMIT 3
+  - question: Doanh thu theo tháng năm 2024 tại TP.HCM
+    sql: |
+      SELECT DATE_TRUNC('month', completed_date)::date AS month, SUM(sale_price) AS completed_revenue
+      FROM analytics.v_transactions
+      WHERE status = 'Hoàn tất' AND city = 'TP.HCM'
+        AND completed_date >= DATE '2024-01-01' AND completed_date < DATE '2025-01-01'
+      GROUP BY 1
+      ORDER BY 1

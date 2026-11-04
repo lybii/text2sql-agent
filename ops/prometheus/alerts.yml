@@ -1,0 +1,43 @@
+# Symptom-based alerts (what users feel), not cause-based. See docs/RUNBOOK.md for the response to each.
+groups:
+  - name: text2sql-slo
+    rules:
+      - alert: PlanningLatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(t2s_plan_seconds_bucket[10m]))) > 10
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: "P95 planning latency > 10s for 10 minutes"
+          runbook: "docs/RUNBOOK.md#planninglatencyp95high"
+
+      - alert: HttpErrorRateHigh
+        expr: |
+          sum(rate(t2s_http_request_seconds_count{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(t2s_http_request_seconds_count[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "More than 5% of API requests fail with 5xx"
+          runbook: "docs/RUNBOOK.md#httperrorratehigh"
+
+      - alert: LLMCircuitOpen
+        expr: max(t2s_circuit_state) == 1
+        for: 2m
+        labels: { severity: ticket }
+        annotations:
+          summary: "An LLM provider circuit is OPEN — answers come from the fallback ladder"
+          runbook: "docs/RUNBOOK.md#llmcircuitopen"
+
+      - alert: GuardRejectionSpike
+        expr: sum(increase(t2s_sql_guard_rejections_total[30m])) > 20
+        labels: { severity: ticket }
+        annotations:
+          summary: "SQL guard rejected > 20 drafts in 30 min (prompt regression or probing)"
+          runbook: "docs/RUNBOOK.md#guardrejectionspike"
+
+      - alert: LLMCostBurn
+        expr: sum(increase(t2s_llm_cost_usd_total[1h])) > 2
+        labels: { severity: ticket }
+        annotations:
+          summary: "LLM spend > $2 in the last hour"
+          runbook: "docs/RUNBOOK.md#llmcostburn"

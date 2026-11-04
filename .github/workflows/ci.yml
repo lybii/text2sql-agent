@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: text2sql
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MIGRATION_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/text2sql?ssl=disable
+      APP_BACKEND_PASSWORD: ci_app
+      ANALYTICS_READER_PASSWORD: ci_reader
+      DATABASE_URL: postgresql+asyncpg://app_backend:ci_app@127.0.0.1:5432/text2sql?ssl=disable
+      ANALYTICS_DATABASE_URL: postgresql+asyncpg://analytics_reader:ci_reader@127.0.0.1:5432/text2sql?ssl=disable
+      JWT_SECRET: ci-secret-0123456789-0123456789-xx
+      LLM_PROVIDER: demo
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Lint & format
+        run: uv run ruff check app tests eval scripts migrations && uv run ruff format --check app tests eval scripts migrations
+      - name: Type check
+        run: uv run mypy app eval
+      - name: Migrate & seed
+        run: uv run alembic upgrade head && uv run python -m scripts.seed
+      - name: Tests (unit + integration)
+        run: uv run pytest -q
+      - name: Eval gate (golden execution accuracy + red-team must be 100 %)
+        run: uv run python -m eval.run --suite all --min-exec-acc 0.95 --out eval/reports/ci.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: backend/eval/reports/ci.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

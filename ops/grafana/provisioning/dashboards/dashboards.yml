@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: text2sql
+    folder: Text2SQL
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

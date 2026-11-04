@@ -1,0 +1,68 @@
+code: customers
+name: Khách hàng
+description: Mỗi dòng là một khách hàng (đã ẩn danh — không có tên, SĐT, email) kèm thành phố, kênh tiếp cận, số lần mua và tổng chi tiêu. Dùng cho câu hỏi về khách hàng mới, kênh marketing, giá trị khách hàng.
+access: open
+sensitivity: internal
+owner: Phòng Marketing
+keywords: [khách hàng, khách mới, kênh, nguồn khách, marketing, chi tiêu, mua lại]
+sample_questions:
+  - Có bao nhiêu khách hàng mới năm 2025?
+  - Số khách hàng mới theo nguồn khách năm 2025
+  - Chi tiêu trung bình của khách hàng theo thành phố
+
+tables:
+  - name: analytics.v_customers
+    description: Hồ sơ khách hàng ẩn danh.
+    columns:
+      - {name: customer_id, type: int, description: Mã khách hàng (ẩn danh)}
+      - {name: city, type: text, description: Thành phố sinh sống, values: [Hà Nội, TP.HCM, Đà Nẵng]}
+      - {name: customer_source, type: text, description: Kênh khách hàng biết đến công ty, values: [Quảng cáo online, Giới thiệu, Website, Sự kiện, Khách vãng lai]}
+      - {name: created_date, type: date, description: Ngày tạo hồ sơ khách hàng}
+      - {name: completed_purchases, type: int, description: Số giao dịch đã hoàn tất}
+      - {name: total_spent, type: numeric, description: Tổng giá trị đã mua (VNĐ)}
+
+metrics:
+  - code: new_customers
+    name: Số khách hàng mới
+    description: Số hồ sơ khách hàng được tạo trong kỳ.
+    expression: COUNT(*)
+    table: analytics.v_customers
+    time_column: created_date
+    requires_time: true
+    unit: count
+    aliases: [khách hàng mới, khách mới, số khách hàng mới]
+  - code: customer_count
+    name: Tổng số khách hàng
+    description: Tổng số khách hàng.
+    expression: COUNT(*)
+    table: analytics.v_customers
+    unit: count
+    aliases: [tổng số khách hàng, số khách hàng, bao nhiêu khách hàng]
+  - code: buyer_conversion_rate
+    name: Tỷ lệ khách đã mua
+    description: Phần trăm khách hàng có ít nhất một giao dịch hoàn tất.
+    expression: ROUND(100.0 * COUNT(*) FILTER (WHERE completed_purchases > 0) / NULLIF(COUNT(*), 0), 2)
+    table: analytics.v_customers
+    unit: percent
+    aliases: [tỷ lệ chuyển đổi, tỷ lệ khách đã mua, tỷ lệ mua hàng]
+  - code: avg_customer_spend
+    name: Chi tiêu trung bình
+    description: Tổng chi tiêu trung bình của khách hàng đã mua.
+    expression: ROUND(AVG(total_spent))
+    table: analytics.v_customers
+    filters: ["completed_purchases > 0"]
+    unit: vnd
+    aliases: [chi tiêu trung bình, giá trị khách hàng trung bình]
+
+dimensions:
+  - {column: city, table: analytics.v_customers, name: Thành phố, aliases: [thành phố, tỉnh]}
+  - {column: customer_source, table: analytics.v_customers, name: Nguồn khách, aliases: [nguồn khách, kênh, nguồn khách hàng, nguồn]}
+
+examples:
+  - question: Số khách hàng mới theo nguồn năm 2025
+    sql: |
+      SELECT customer_source, COUNT(*) AS new_customers
+      FROM analytics.v_customers
+      WHERE created_date >= DATE '2025-01-01' AND created_date < DATE '2026-01-01'
+      GROUP BY customer_source
+      ORDER BY new_customers DESC

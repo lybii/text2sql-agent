@@ -1,0 +1,88 @@
+code: inventory
+name: Sản phẩm & tồn kho
+description: Mỗi dòng là một bất động sản đang hoặc đã từng mở bán, kèm loại, dự án, khu vực, diện tích, giá niêm yết và tình trạng còn hàng. Dùng cho câu hỏi về tồn kho, giá niêm yết, diện tích.
+access: open
+sensitivity: internal
+owner: Phòng Sản phẩm
+keywords: [tồn kho, còn hàng, chưa bán, niêm yết, giá niêm yết, diện tích, giá mỗi m2, sản phẩm, căn]
+sample_questions:
+  - Còn bao nhiêu bất động sản chưa bán?
+  - Tồn kho theo dự án
+  - Giá niêm yết trung bình mỗi m2 của căn hộ theo thành phố
+
+tables:
+  - name: analytics.v_properties
+    description: Danh mục bất động sản.
+    columns:
+      - {name: property_code, type: text, description: Mã bất động sản}
+      - {name: property_type, type: text, description: Loại bất động sản, values: [Căn hộ, Nhà phố, Đất nền, Biệt thự]}
+      - {name: project_name, type: text, description: Tên dự án, values: [Lotus Garden, Sky Harbor, Maple Residence, Riverside One, Golden Coast, Pine Hill]}
+      - {name: district, type: text, description: Quận/huyện, values: [Cầu Giấy, Tây Hồ, Hoàng Mai, Long Biên, Nam Từ Liêm, Quận 1, Quận 7, Thủ Đức, Bình Thạnh, Gò Vấp, Hải Châu, Sơn Trà, Ngũ Hành Sơn]}
+      - {name: city, type: text, description: Thành phố, values: [Hà Nội, TP.HCM, Đà Nẵng]}
+      - {name: area_m2, type: numeric, description: Diện tích (m2)}
+      - {name: bedrooms, type: int, description: Số phòng ngủ (NULL với đất nền)}
+      - {name: list_price, type: numeric, description: Giá niêm yết (VNĐ)}
+      - {name: price_per_m2, type: numeric, description: Giá niêm yết mỗi m2 (VNĐ)}
+      - {name: listed_date, type: date, description: Ngày mở bán}
+      - {name: is_available, type: bool, description: TRUE nếu còn tồn kho (chưa có giao dịch hoàn tất/đặt cọc/đang xử lý)}
+      - {name: agent_name, type: text, description: Nhân viên phụ trách}
+
+metrics:
+  - code: available_units
+    name: Số sản phẩm tồn kho
+    description: Số bất động sản còn có thể bán.
+    expression: COUNT(*)
+    table: analytics.v_properties
+    filters: ["is_available"]
+    unit: count
+    aliases: [tồn kho, còn hàng, chưa bán, còn bao nhiêu, số căn còn lại, sản phẩm tồn]
+  - code: listed_units
+    name: Số sản phẩm mở bán
+    description: Số bất động sản được mở bán trong kỳ.
+    expression: COUNT(*)
+    table: analytics.v_properties
+    time_column: listed_date
+    unit: count
+    aliases: [số sản phẩm mở bán, mở bán bao nhiêu, số căn mở bán]
+  - code: avg_list_price
+    name: Giá niêm yết trung bình
+    description: Giá niêm yết trung bình.
+    expression: ROUND(AVG(list_price))
+    table: analytics.v_properties
+    unit: vnd
+    aliases: [giá niêm yết trung bình, giá niêm yết]
+  - code: avg_price_per_m2
+    name: Giá trung bình mỗi m2
+    description: Giá niêm yết trung bình trên mỗi m2.
+    expression: ROUND(AVG(price_per_m2))
+    table: analytics.v_properties
+    unit: vnd
+    aliases: [giá mỗi m2, giá trên m2, đơn giá m2, giá/m2, giá trung bình mỗi m2]
+  - code: avg_area
+    name: Diện tích trung bình
+    description: Diện tích trung bình (m2).
+    expression: ROUND(AVG(area_m2), 1)
+    table: analytics.v_properties
+    unit: m2
+    aliases: [diện tích trung bình, diện tích]
+
+dimensions:
+  - {column: city, table: analytics.v_properties, name: Thành phố, aliases: [thành phố, tỉnh]}
+  - {column: district, table: analytics.v_properties, name: Quận/huyện, aliases: [quận, huyện, khu vực]}
+  - {column: property_type, table: analytics.v_properties, name: Loại BĐS, aliases: [loại bất động sản, loại bđs, loại sản phẩm, loại hình]}
+  - {column: project_name, table: analytics.v_properties, name: Dự án, aliases: [dự án]}
+  - {column: bedrooms, table: analytics.v_properties, name: Số phòng ngủ, aliases: [số phòng ngủ, phòng ngủ]}
+
+examples:
+  - question: Tồn kho theo dự án
+    sql: |
+      SELECT project_name, COUNT(*) AS available_units
+      FROM analytics.v_properties
+      WHERE is_available
+      GROUP BY project_name
+      ORDER BY available_units DESC
+  - question: Giá trung bình mỗi m2 của căn hộ tại Hà Nội
+    sql: |
+      SELECT ROUND(AVG(price_per_m2)) AS avg_price_per_m2
+      FROM analytics.v_properties
+      WHERE property_type = 'Căn hộ' AND city = 'Hà Nội'

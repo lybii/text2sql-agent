@@ -1,0 +1,62 @@
+code: staff_performance
+name: Hiệu suất nhân viên
+description: Doanh thu, hoa hồng, số giao dịch hoàn tất và chỉ tiêu theo tháng của từng nhân viên kinh doanh. Dữ liệu đánh giá cá nhân — cần được cấp quyền.
+access: restricted
+sensitivity: confidential
+owner: Phòng Nhân sự
+keywords: [nhân viên, hiệu suất, chỉ tiêu, kpi, đạt chỉ tiêu, xếp hạng nhân viên]
+sample_questions:
+  - Top 5 nhân viên có doanh thu cao nhất năm 2025
+  - Tỷ lệ hoàn thành chỉ tiêu theo thành phố năm 2025
+
+tables:
+  - name: analytics.v_agent_monthly
+    description: Kết quả kinh doanh theo tháng của từng nhân viên.
+    columns:
+      - {name: agent_id, type: int, description: Mã nhân viên}
+      - {name: agent_name, type: text, description: Tên nhân viên}
+      - {name: district, type: text, description: Quận/huyện nhân viên phụ trách}
+      - {name: city, type: text, description: Thành phố, values: [Hà Nội, TP.HCM, Đà Nẵng]}
+      - {name: year, type: int, description: Năm}
+      - {name: month, type: int, description: Tháng (1-12)}
+      - {name: revenue, type: numeric, description: Doanh thu hoàn tất trong tháng (VNĐ)}
+      - {name: commission, type: numeric, description: Hoa hồng trong tháng (VNĐ)}
+      - {name: completed_deals, type: int, description: Số giao dịch hoàn tất trong tháng}
+      - {name: target_revenue, type: numeric, description: Chỉ tiêu doanh thu của tháng (VNĐ)}
+
+metrics:
+  - code: agent_revenue
+    name: Doanh thu nhân viên
+    description: Tổng doanh thu hoàn tất của nhân viên.
+    expression: SUM(revenue)
+    table: analytics.v_agent_monthly
+    time_column: year
+    time_kind: year_month
+    requires_time: true
+    unit: vnd
+    aliases: [doanh thu nhân viên, doanh thu của nhân viên, nhân viên có doanh thu, nhân viên bán tốt nhất]
+  - code: target_achievement
+    name: Tỷ lệ hoàn thành chỉ tiêu
+    description: Doanh thu / chỉ tiêu (%).
+    expression: ROUND(100.0 * SUM(revenue) / NULLIF(SUM(target_revenue), 0), 2)
+    table: analytics.v_agent_monthly
+    time_column: year
+    time_kind: year_month
+    requires_time: true
+    unit: percent
+    aliases: [hoàn thành chỉ tiêu, đạt chỉ tiêu, tỷ lệ đạt kpi, kpi]
+
+dimensions:
+  - {column: agent_name, table: analytics.v_agent_monthly, name: Nhân viên, aliases: [nhân viên, môi giới, sale]}
+  - {column: city, table: analytics.v_agent_monthly, name: Thành phố, aliases: [thành phố, tỉnh]}
+  - {column: district, table: analytics.v_agent_monthly, name: Quận/huyện, aliases: [quận, huyện, khu vực]}
+
+examples:
+  - question: Top 5 nhân viên có doanh thu cao nhất năm 2025
+    sql: |
+      SELECT agent_name, SUM(revenue) AS agent_revenue
+      FROM analytics.v_agent_monthly
+      WHERE year = 2025
+      GROUP BY agent_name
+      ORDER BY agent_revenue DESC
+      LIMIT 5

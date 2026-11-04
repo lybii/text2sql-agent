@@ -1,0 +1,102 @@
+name: text2sql-agent
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-local}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5173}", "http://127.0.0.1:${FRONTEND_PORT:-5173}"]'
+  DATABASE_URL: postgresql+asyncpg://app_backend:${APP_BACKEND_PASSWORD}@db:5432/${POSTGRES_DB:-text2sql}
+  ANALYTICS_DATABASE_URL: postgresql+asyncpg://analytics_reader:${ANALYTICS_READER_PASSWORD}@db:5432/${POSTGRES_DB:-text2sql}
+  JWT_SECRET: ${JWT_SECRET}
+  LLM_PROVIDER: ${LLM_PROVIDER:-demo}
+  LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+  LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+  APPROVAL_MODE: ${APPROVAL_MODE:-always}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-text2sql}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5444}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-text2sql}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: migrate as the owner, then load deterministic demo data.
+  migrate:
+    build: ./backend
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-text2sql}
+      APP_BACKEND_PASSWORD: ${APP_BACKEND_PASSWORD:?set APP_BACKEND_PASSWORD in .env}
+      ANALYTICS_READER_PASSWORD: ${ANALYTICS_READER_PASSWORD:?set ANALYTICS_READER_PASSWORD in .env}
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: ./backend
+    environment: *backend-env
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:${BACKEND_PORT:-8000}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+
+  # ---- optional: `docker compose --profile observability up` ----
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["observability"]
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:

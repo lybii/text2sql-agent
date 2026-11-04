@@ -1,0 +1,61 @@
+[project]
+name = "text2sql-agent"
+version = "0.1.0"
+description = "Vietnamese natural-language analytics agent with human-approved, guard-railed Text-to-SQL"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "email-validator>=2.2",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "sqlglot>=26,<28",
+    "pyjwt>=2.10",
+    "bcrypt>=4.2",
+    "pyyaml>=6.0",
+    "langgraph>=0.3",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.3",
+    "langfuse>=3",
+    "prometheus-client>=0.21",
+]
+
+
+
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "types-pyyaml",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = ["integration: requires a running PostgreSQL (DATABASE_URL)"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC", "RUF"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]  # E501: `ruff format` owns line length
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
